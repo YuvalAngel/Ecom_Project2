@@ -4,8 +4,7 @@ from test import test_1, test_2, test_3
 from Recommender import Recommender
 import numpy as np
 
-
-TOTAL_TIME_LIMIT = 120 # seconds
+TOTAL_TIME_LIMIT = 120  # seconds
 
 class Simulation():
     def __init__(self, P: np.array, prices: np.array, budget, n_weeks: int):
@@ -16,106 +15,98 @@ class Simulation():
 
     def _validate_recommendation(self, recommendation):
         if not isinstance(recommendation, np.ndarray):
-            print(f'ERROR: {recommendation} is not an np.array')
             return False
-        
         if not np.issubdtype(recommendation.dtype, np.integer):
-            print(f'ERROR: type of {recommendation} is not int')
             return False
-        
         if recommendation.shape != (self.P.shape[0],):
-            print(f'ERROR: {recommendation} is not 1D array or has wrong length')
             return False
-        
         if ((recommendation < 0) | (recommendation >= self.P.shape[1])).any():
-            print(f'ERROR: {recommendation} contains invalid podcasts')
             return False
-
         podcasts = np.unique(recommendation)
         total_price = np.sum(self.item_prices[podcasts])
-        
         if total_price > self.budget:
-            print(f'ERROR: {total_price} is above budget of {self.budget}')
             return False
-            
         return True
-    
-    def simulate(self) -> int:
+
+    def simulate(self, smoothing=0.1, explore_rounds=10):
         total_time_taken = 0
-        
-        init_start = time.perf_counter()
-        
-        try:
-            recommender = Recommender(n_weeks=self.n_weeks, n_users=self.P.shape[0], 
-                                      prices=self.item_prices.copy(), 
-                                      budget=self.budget)
-        except Exception as e:
-            print('Recommender __init__ caused error')
-            raise e
-        
-        init_end = time.perf_counter()
-        
-        total_time_taken += init_end - init_start
-        
+
+        # Use the wrapper here
+        recommender = Recommender(
+            n_weeks=self.n_weeks,
+            n_users=self.P.shape[0],
+            prices=self.item_prices.copy(),
+            budget=self.budget,
+            smoothing=smoothing,
+            explore_rounds=explore_rounds
+        )
+
         reward = 0
-              
+
         for round_idx in range(self.n_weeks):
-            try:
-                recommendation_start = time.perf_counter()
-                recommendation = recommender.recommend()
-                recommendation_end = time.perf_counter()
-            except Exception as e:
-                print(f'Recommmender.recommend() raised error at round {round_idx}')
-                raise e 
-                
-            if recommendation is None:
-                print('No recommendation supplied.')
-                return 0
-                
-            recommendation_time = recommendation_end - recommendation_start
-                
-            if not self._validate_recommendation(recommendation):
-                print(f'Error: Invalid recommendation at round {round_idx}')
-                return 0
-            
+            start = time.perf_counter()
+            recommendation = recommender.recommend()
+            end = time.perf_counter()
+
+            if recommendation is None or not self._validate_recommendation(recommendation):
+                return 0, total_time_taken
+
             results = np.random.binomial(n=1, p=self.P[np.arange(self.P.shape[0]), recommendation])
-            current_reward = np.sum(results)
-            next_reward = reward + current_reward
-            
-            try:
-                update_start_time = time.perf_counter()
-                recommender.update(results)
-                update_end_time = time.perf_counter()
-            except Exception as e:
-                print(f'Recommmender.update() raised error at round {round_idx}')
-                raise e
-            
-            update_time = update_end_time - update_start_time
+            reward += np.sum(results)
 
-            time_for_current_round = recommendation_time + update_time
+            update_start = time.perf_counter()
+            recommender.update(results)
+            update_end = time.perf_counter()
 
-            if total_time_taken + time_for_current_round > TOTAL_TIME_LIMIT:
-                print(f'TOTAL TIME LIMIT EXCEEDED. Returning reward at after {round_idx} rounds')
-                return reward
-            else:
-                total_time_taken += time_for_current_round
-                reward = next_reward
-        
-        # print(f'Total time taken: {total_time_taken} seconds')
+            round_time = (end - start) + (update_end - update_start)
+            if total_time_taken + round_time > TOTAL_TIME_LIMIT:
+                return reward, total_time_taken
+            total_time_taken += round_time
+
         return reward, total_time_taken
-    
-if __name__ == '__main__':
-    iterations = 20
-    for test in [test_1, test_2, test_3]:
-        total_rewards = 0
-        total_time_taken = 0
-        simulation = Simulation(test['P'], test['item_prices'], test['budget'], test['n_weeks'])
-        for _ in range(iterations):
-            current_reward, current_time = simulation.simulate()
-            total_rewards += current_reward
-            total_time_taken += current_time
-        reward = total_rewards / iterations
-        print(f'Average Reward = {reward}, Total Time of Test: {total_time_taken}, Number of Iterations: {iterations}')
-        avg_time_per_iteration = total_time_taken / iterations
-        print(f'Time Per Run: {avg_time_per_iteration} Seconds')
 
+
+
+if __name__ == '__main__':
+    for test_number, test in enumerate([test_1, test_2, test_3], start=1):
+        print(f"\n=== Test {test_number} ===")
+
+        trials_per_config = 5
+        final_trials = 20
+
+        best_config = None
+        best_avg_reward = -1
+
+        explore_rounds_options = [0, 5, 10, 20]
+        smoothing = 1.0
+
+        for explore_rounds in explore_rounds_options:
+            total_reward = 0
+            for _ in range(trials_per_config):
+                sim = Simulation(test['P'], test['item_prices'], test['budget'], test['n_weeks'])
+                reward, _ = sim.simulate(smoothing=smoothing, explore_rounds=explore_rounds)
+                total_reward += reward
+            avg_reward = total_reward / trials_per_config
+            print(f"Config: smoothing={smoothing}, explore_rounds={explore_rounds}, Avg Reward={avg_reward:.2f}")
+
+            # Track best config here
+            if avg_reward > best_avg_reward:
+                best_avg_reward = avg_reward
+                best_config = (smoothing, explore_rounds)
+
+        print(f"\nBest Config for Test {test_number}: smoothing={best_config[0]}, explore_rounds={best_config[1]}")
+
+        # Final run on best config
+        final_total_reward = 0
+        final_total_time = 0
+        for _ in range(final_trials):
+            sim = Simulation(test['P'], test['item_prices'], test['budget'], test['n_weeks'])
+            reward, run_time = sim.simulate(smoothing=best_config[0], explore_rounds=best_config[1])
+            final_total_reward += reward
+            final_total_time += run_time
+
+        final_avg_reward = final_total_reward / final_trials
+        avg_time = final_total_time / final_trials
+
+        print(f"Final Avg Reward: {final_avg_reward:.2f}")
+        print(f"Avg Time Per Run: {avg_time:.2f} seconds")

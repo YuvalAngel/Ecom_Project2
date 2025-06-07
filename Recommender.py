@@ -6,107 +6,114 @@ class Recommender:
                  n_users: int,
                  prices: np.ndarray,
                  budget: float,
-                 smoothing: float = 1.0):
+                 smoothing: float = 0.1,  # smaller smoothing or even zero
+                 explore_rounds: int = 10):
         """
-        Online learning recommender with exhaustive subset search under budget
-        using Laplace-smoothed click-rate estimates.
+        Explore-Then-Explore recommender under budget constraint.
 
         Args:
-            n_weeks   (int): Number of rounds (for interface compatibility).
-            n_users   (int): Number of users (N).
-            prices    (np.ndarray[K,]): Cost of each podcast.
-            budget    (float): Total budget per round (B).
-            smoothing (float): Laplace smoothing parameter α>0.
+            n_weeks       (int): Number of rounds (interface compatibility).
+            n_users       (int): Number of users (N).
+            prices        (np.ndarray[K,]): Cost per podcast.
+            budget        (float): Budget per round (B).
+            smoothing     (float): Prior pseudocount (α ≥ 0).
+            explore_rounds(int): Number of initial pure exploration rounds (random).
         """
         self.T = n_weeks
         self.N = n_users
         self.costs = np.array(prices, dtype=float)
         self.K = self.costs.size
         self.B = float(budget)
-        self.smoothing = float(smoothing)
+        self.alpha = float(smoothing)
+        self.explore_rounds = int(explore_rounds)
 
-        # Track successes/trials per (user, podcast)
         self.successes = np.zeros((self.N, self.K), dtype=float)
-        self.trials    = np.zeros((self.N, self.K), dtype=float)
-
-        # Remember last recommendations
+        self.failures  = np.zeros((self.N, self.K), dtype=float)
         self.last_recs = np.zeros(self.N, dtype=int)
+        self.round = 0
 
     def recommend(self) -> np.ndarray:
-        """
-        Estimate click probabilities and pick the subset S⊆{0..K-1} with cost≤B
-        that maximizes total expected clicks via exhaustive search. Then recommend
-        each user the item in S with highest estimated click-rate.
+        self.round += 1
 
-        Returns:
-            recs (np.ndarray[N,]): podcast indices, or -1 if none fits.
-        """
-        # 1) Laplace-smoothed estimates: (successes+α)/(trials+2α)
-        hatP = (self.successes + self.smoothing) / (self.trials + 2*self.smoothing)
+        # Calculate empirical means with smoothing
+        p_hat = (self.successes + self.alpha) / (self.successes + self.failures + 2 * self.alpha)
 
-        # 2) Exhaustive search over all subsets of [0..K): 2^K possibilities
+        if self.round <= self.explore_rounds:
+            # Random exploration: pick random feasible subset
+            feasible_subsets = []
+            attempts = 0
+            max_attempts = 1000
+            while attempts < max_attempts:
+                mask = np.random.randint(1, 1 << self.K)
+                total_cost = 0.0
+                for j in range(self.K):
+                    if mask & (1 << j):
+                        total_cost += self.costs[j]
+                        if total_cost > self.B:
+                            break
+                else:
+                    feasible_subsets.append([j for j in range(self.K) if (mask & (1 << j))])
+                if feasible_subsets:
+                    break
+                attempts += 1
+
+            if not feasible_subsets:
+                recs = -1 * np.ones(self.N, dtype=int)
+            else:
+                S = feasible_subsets[0]
+                recs = np.zeros(self.N, dtype=int)
+                for n in range(self.N):
+                    recs[n] = np.random.choice(S)
+
+            self.last_recs = recs
+            return recs
+
+        # Exploitation: maximize expected success sum over best feasible subset
         best_S = []
-        best_val = -1.0
-        K = self.K
-        costs = self.costs
-        B = self.B
-        N = self.N
-
-        # iterate masks from 1..2^K-1
-        for mask in range(1, 1 << K):
-            # compute total cost
+        best_val = -np.inf
+        for mask in range(1, 1 << self.K):
             total_cost = 0.0
-            # early prune: accumulate cost
-            for j in range(K):
+            for j in range(self.K):
                 if mask & (1 << j):
-                    total_cost += costs[j]
-                    if total_cost > B:
+                    total_cost += self.costs[j]
+                    if total_cost > self.B:
                         break
             else:
-                # compute expected clicks: sum over users of max hatP[n,k] for k in subset
                 val = 0.0
-                for n in range(N):
+                for n in range(self.N):
                     max_p = 0.0
-                    for j in range(K):
-                        if mask & (1 << j):
-                            p = hatP[n, j]
-                            if p > max_p:
-                                max_p = p
+                    for j in range(self.K):
+                        if mask & (1 << j) and p_hat[n, j] > max_p:
+                            max_p = p_hat[n, j]
                     val += max_p
-                # update best
                 if val > best_val:
                     best_val = val
-                    # store indices in S
-                    best_S = [j for j in range(K) if (mask & (1 << j))]
+                    best_S = [j for j in range(self.K) if (mask & (1 << j))]
 
-        # 3) Form recommendations
         if not best_S:
-            recs = -1 * np.ones(N, dtype=int)
+            recs = -1 * np.ones(self.N, dtype=int)
         else:
-            recs = np.zeros(N, dtype=int)
-            for n in range(N):
-                # choose k in best_S with max hatP[n,k]
+            recs = np.zeros(self.N, dtype=int)
+            for n in range(self.N):
                 best_k = best_S[0]
-                best_p = hatP[n, best_k]
+                best_p = p_hat[n, best_k]
                 for k in best_S[1:]:
-                    p = hatP[n, k]
-                    if p > best_p:
-                        best_k, best_p = k, p
+                    if p_hat[n, k] > best_p:
+                        best_k, best_p = k, p_hat[n, k]
                 recs[n] = best_k
 
         self.last_recs = recs
         return recs
 
     def update(self, feedback: np.ndarray):
-        """
-        Update success/trial counts from binary feedback on last_recs.
-
-        Args:
-            feedback (np.ndarray[N,]): 1 if user clicked, else 0.
-        """
         for n in range(self.N):
             k = self.last_recs[n]
             if 0 <= k < self.K:
-                self.trials[n, k]   += 1.0
                 if feedback[n]:
                     self.successes[n, k] += 1.0
+                else:
+                    self.failures[n, k] += 1.0
+
+
+
+
