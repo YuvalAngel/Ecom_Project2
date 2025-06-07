@@ -1,74 +1,100 @@
 import numpy as np
 
 class Recommender:
-    def __init__(self, n_weeks: int, n_users: int, prices: np.array, budget: int):
+    def __init__(self,
+                 n_weeks: int,
+                 n_users: int,
+                 prices: np.ndarray,
+                 budget: float,
+                 smoothing: float = 1.0):
         """
-        Initializes the recommendation system.
+        Online learning recommender under budget using a greedy knapsack approximation
+        with Laplace-smoothed click-rate estimates per user-item.
 
         Args:
-            n_weeks (int): Number of weeks to run.
-            n_users (int): Number of users.
-            prices (np.array): Array of podcast production costs (length K).
-            budget (int): Weekly budget constraint.
+            n_weeks (int): Number of rounds (unused internally, but kept for interface compatibility).
+            n_users (int): Number of users (N).
+            prices (np.ndarray[K,]): Cost of each podcast.
+            budget (float): Total budget per round (B).
+            smoothing (float): Laplace smoothing parameter (default=1.0).
         """
-        self.n_rounds = n_weeks
-        self.n_users = n_users
-        self.item_prices = prices
-        self.budget = budget
+        self.T = n_weeks
+        self.N = n_users
+        self.costs = np.array(prices, dtype=float)
+        self.K = self.costs.size
+        self.B = float(budget)
+        self.smoothing = smoothing
 
-        self.K = len(prices)
-        self.feedback = np.zeros((n_users, self.K))  # Likes count per user and podcast
-        self.counts = np.ones((n_users, self.K))     # To avoid division by zero
-        self.week = 0
+        # Track successes and trials for each user-item pair
+        self.successes = np.zeros((self.N, self.K), dtype=float)
+        self.trials = np.zeros((self.N, self.K), dtype=float)
 
-    def recommend(self) -> np.array:
+        # Last recommendations (for mapping feedback)
+        self.last_recs = np.zeros(self.N, dtype=int)
+
+    def recommend(self) -> np.ndarray:
         """
-        Recommend a podcast to each user for the current week.
+        Estimate click probabilities, solve a greedy knapsack for best subset S,
+        then recommend to each user the item in S with highest estimated rate.
 
         Returns:
-            np.array: An array of shape (n_users,) where each entry is a podcast index
-                      that was recommended to the corresponding user.
+            np.ndarray of shape (N,) with item indices (or -1 if no feasible selection).
         """
-        self.week += 1
+        # Compute Laplace-smoothed estimates
+        hatP = (self.successes + self.smoothing) / (self.trials + 2 * self.smoothing)
 
-        avg_rewards = self.feedback / self.counts
-        global_estimates = avg_rewards.mean(axis=0)
+        # Greedy knapsack approximation: maximize sum_n max(hatP[n,k], bestP[n]) under cost
+        bestP = np.zeros(self.N, dtype=float)
+        chosen = []
+        remaining = self.B
+        candidates = set(range(self.K))
+        while True:
+            best_gain = 0.0
+            best_k = None
+            # Evaluate marginal gain per cost
+            for k in candidates:
+                cost = self.costs[k]
+                if cost > remaining:
+                    continue
+                # Gain = sum over users of additional probability
+                gain = np.sum(np.maximum(hatP[:, k] - bestP, 0.0))
+                if gain <= 0:
+                    continue
+                ratio = gain / cost
+                if ratio > best_gain:
+                    best_gain = ratio
+                    best_k = k
+            if best_k is None:
+                break
+            # Accept item best_k
+            chosen.append(best_k)
+            remaining -= self.costs[best_k]
+            # Update covered probabilities
+            bestP = np.maximum(bestP, hatP[:, best_k])
+            candidates.remove(best_k)
 
-        # Budgeted greedy selection
-        value_per_cost = global_estimates / self.item_prices
-        sorted_indices = np.argsort(-value_per_cost)
+        # Form recommendations
+        if not chosen:
+            recs = -1 * np.ones(self.N, dtype=int)
+        else:
+            recs = np.zeros(self.N, dtype=int)
+            for n in range(self.N):
+                # pick the item with max hatP for user n among chosen
+                recs[n] = int(max(chosen, key=lambda k: hatP[n, k]))
 
-        produced = np.zeros(self.K, dtype=bool)
-        total_cost = 0
-        for i in sorted_indices:
-            if total_cost + self.item_prices[i] <= self.budget:
-                produced[i] = True
-                total_cost += self.item_prices[i]
+        self.last_recs = recs
+        return recs
 
-        recommendations = np.zeros(self.n_users, dtype=int)
-        for user in range(self.n_users):
-            personal_score = self.feedback[user] / self.counts[user]
-            masked_score = personal_score * produced
-            if np.any(produced):
-                if np.all(masked_score == 0):
-                    recommendations[user] = np.random.choice(np.where(produced)[0])
-                else:
-                    recommendations[user] = np.argmax(masked_score)
-            else:
-                recommendations[user] = 0
-
-        self.last_recommendations = recommendations
-        return recommendations
-
-    def update(self, results: np.array):
+    def update(self, feedback: np.ndarray):
         """
-        Update feedback based on user responses.
+        Update success/trial counts from binary feedback of last recommendations.
 
         Args:
-            results (np.array): A binary array of shape (n_users,) indicating user feedback
-                                (1 if user liked the podcast, 0 otherwise).
+            feedback (np.ndarray[N,]): 1 indicates success, 0 indicates failure.
         """
-        for user_id, liked in enumerate(results):
-            podcast_id = self.last_recommendations[user_id]
-            self.feedback[user_id, podcast_id] += liked
-            self.counts[user_id, podcast_id] += 1
+        for n, liked in enumerate(feedback):
+            k = self.last_recs[n]
+            if 0 <= k < self.K:
+                self.trials[n, k] += 1.0
+                if liked:
+                    self.successes[n, k] += 1.0
