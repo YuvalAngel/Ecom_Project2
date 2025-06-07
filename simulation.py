@@ -101,11 +101,21 @@ class Simulation():
                 total_time_taken += time_for_current_round
                 reward = next_reward
         
-        print(f'Total time taken: {total_time_taken} seconds')
-        return reward
+        # print(f'Total time taken: {total_time_taken} seconds')
+        return reward, total_time_taken
     
 if __name__ == '__main__':
+    iterations = 20
     for test in [test_1, test_2, test_3]:
+        total_rewards = 0
+        total_time_taken = 0
         simulation = Simulation(test['P'], test['item_prices'], test['budget'], test['n_weeks'])
-        print(f'Reward = {simulation.simulate()}')
+        for _ in range(iterations):
+            current_reward, current_time = simulation.simulate()
+            total_rewards += current_reward
+            total_time_taken += current_time
+        reward = total_rewards / iterations
+        print(f'Average Reward = {reward}, Total Time of Test: {total_time_taken}, Number of Iterations: {iterations}')
+        avg_time_per_iteration = total_time_taken / iterations
+        print(f'Time Per Run: {avg_time_per_iteration} Seconds')
 
