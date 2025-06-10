@@ -105,7 +105,7 @@ def run_tests(num_runs_per_test=1, top_k=5, agents_params=None):
                     best_params = params
             
             status = "✅" if best_reward >= required_results[i] else "❌"
-            print(f"{AgentClass.__name__:>16}: reward = {best_reward:.2f} {status} with params {format_params(best_params)}")
+            print(f"{AgentClass.__name__:>16}: Best Reward = {best_reward:.2f} {status} Using Config: {format_params(best_params)}")
     
     # Sort total_rewards and get top_k configs per agent
     # total_rewards keys: (AgentClass, frozenset(params.items()))
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     middle_agents_params = {AgentClass: [params for params, _ in configs] for AgentClass, configs in quick_top.items()}
     
     # Middle run: 5 runs/test, keep top 3 from quick run's top 5 configs
-    print("Starting Middle Run: 5 runs per configuration")
+    print("Starting Middle Run: 10 runs per configuration")
     middle_top = run_tests(num_runs_per_test=10, top_k=3, agents_params=middle_agents_params)
     format_top_configs(middle_top, "Middle Run (5x per test, top 3)")
     
@@ -148,7 +148,7 @@ if __name__ == "__main__":
     final_agents_params = {AgentClass: [params for params, _ in configs] for AgentClass, configs in middle_top.items()}
     
     # Final run: 20 runs/test, keep top 3 from middle run's top 3 configs
-    print("Starting Final Run: 20 runs per configuration")
+    print("Starting Final Run: 50 runs per configuration")
     final_top = run_tests(num_runs_per_test=50, top_k=3, agents_params=final_agents_params)
     format_top_configs(final_top, "Final Run (20x per test, top 3)")
     

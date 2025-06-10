@@ -2,6 +2,31 @@
 
 import numpy as np
 
+
+def build_feasible_set(prices: np.ndarray, budget: float, scores: np.ndarray) -> list:
+    """
+    Greedy feasible set builder selecting items with highest scores
+    under budget constraints.
+
+    Args:
+        prices (np.ndarray): Cost per item.
+        budget (float): Total budget.
+        scores (np.ndarray): Scores per item to rank selection.
+
+    Returns:
+        list: Selected item indices within budget.
+    """
+    idx = np.argsort(-scores)
+    S = []
+    total_cost = 0.0
+    for j in idx:
+        if total_cost + prices[j] <= budget:
+            S.append(j)
+            total_cost += prices[j]
+    return S
+
+
+
 class Recommender:
     def __init__(self,
                  n_weeks: int,
@@ -88,28 +113,22 @@ class Recommender:
                 iters += 1
                 continue
 
-            # Try swaps
-            for i in best_S[:]:
-                for k in range(self.K):
-                    if k in best_S_set:
-                        continue
-                    new_cost = cost_S - self.costs[i] + self.costs[k]
-                    if new_cost > self.B:
-                        continue
-                    cand_S = [j for j in best_S if j != i] + [k]
+            for k in best_S[:]:
+                cand_S = [j for j in best_S if j != k]
+                if cand_S:
                     candP = np.max(p_hat[:, cand_S], axis=1)
-                    gain = candP.sum()
-                    if gain > best_gain:
-                        best_S.remove(i)
-                        best_S.append(k)
-                        best_S_set.remove(i)
-                        best_S_set.add(k)
-                        bestP = candP
-                        best_gain = gain
-                        cost_S = new_cost
-                        improved = True
-                        break
-                if improved:
+                    cand_cost = cost_S - self.costs[k]
+                else:
+                    candP = np.zeros(self.N)
+                    cand_cost = 0.0
+                gain = candP.sum()
+                if gain > best_gain:
+                    best_S.remove(k)
+                    best_S_set.remove(k)
+                    bestP = candP
+                    best_gain = gain
+                    cost_S = cand_cost
+                    improved = True
                     break
 
             if not improved:
@@ -118,29 +137,16 @@ class Recommender:
 
         return best_S
 
-    def __greedy_feasible_set(self, p_hat) -> list:
-        indices = np.argsort(-p_hat.mean(axis=0))  # best items across users
-        S = []
-        total_cost = 0.0
-        for j in indices:
-            if total_cost + self.costs[j] <= self.B:
-                S.append(j)
-                total_cost += self.costs[j]
-        return S
-
 
     def recommend(self) -> np.ndarray:
         self.round += 1
         
         if self.round <= self.explore_rounds:
-            # pure exploration (random feasible sets)
-            idx = np.random.permutation(self.K)
-            S = []
-            total = 0.0
-            for j in idx:
-                if total + self.costs[j] <= self.B:
-                    S.append(j)
-                    total += self.costs[j]
+            # create random scores for each user-item
+            random_scores = np.random.rand(self.N, self.K)
+            avg_scores = random_scores.mean(axis=0)
+            S = build_feasible_set(self.costs, self.B, avg_scores)
+
             recs = np.random.choice(S, size=self.N)
             self.last_recs = recs
             return recs
@@ -155,13 +161,16 @@ class Recommender:
         # p_hat = mean + confidence
         # p_hat = np.clip(p_hat, 0, 1)
 
-        best_S = self.__greedy_feasible_set(p_hat)
+        avg_scores = p_hat.mean(axis=0)
+        best_S = build_feasible_set(self.costs, self.B, avg_scores)
 
         # hill-climb refine
         best_S = self.__hill__climb(best_S, p_hat)
 
         # assign to users
-        recs = np.array([max(best_S, key=lambda k: p_hat[n, k]) for n in range(self.N)])
+        p_hat_S = p_hat[:, best_S]               # shape (N, |best_S|)
+        best_indices = np.argmax(p_hat_S, axis=1)  # index of best arm per user in best_S
+        recs = np.array([best_S[i] for i in best_indices])
         self.last_recs = recs
         return recs
 
@@ -188,19 +197,14 @@ class EpsilonGreedy:
 
     def recommend(self):
         if np.random.rand() < self.epsilon:
-            idx = np.random.permutation(self.n_arms)
+            scores = np.random.rand(self.n_arms)
         else:
-            avg_val = self.values.mean(axis=0)
-            idx = np.argsort(-avg_val)
+            scores = self.values.mean(axis=0)
 
-        S = []
-        total_cost = 0
-        for arm in idx:
-            if total_cost + self.prices[arm] <= self.budget:
-                S.append(arm)
-                total_cost += self.prices[arm]
+        S = build_feasible_set(self.prices, self.budget, scores)
 
         return np.array([max(S, key=lambda a: self.values[u, a]) for u in range(self.n_users)])
+
 
     def update(self, users, arms, rewards):
         for u, a, r in zip(users, arms, rewards):
@@ -228,14 +232,9 @@ class UCB:
         total = self.counts + 1e-8
         ucb = self.values + self.c * np.sqrt(np.log(self.total_counts) / total)
 
-        avg_ucb = ucb.mean(axis=0)
-        idx = np.argsort(-avg_ucb)
-        S = []
-        total_cost = 0
-        for a in idx:
-            if total_cost + self.prices[a] <= self.budget:
-                S.append(a)
-                total_cost += self.prices[a]
+        scores = ucb.mean(axis=0)
+
+        S = build_feasible_set(self.prices, self.budget, scores)
 
         return np.array([max(S, key=lambda a: ucb[u, a]) for u in range(self.n_users)])
 
@@ -261,15 +260,9 @@ class ThompsonSampling:
         samples = np.random.beta(self.successes + self.alpha,
                                  self.failures + self.alpha)
 
-        # Average sample to get overall good arms
-        avg_sample = samples.mean(axis=0)
-        idx = np.argsort(-avg_sample)
-        S = []
-        total_cost = 0
-        for a in idx:
-            if total_cost + self.prices[a] <= self.budget:
-                S.append(a)
-                total_cost += self.prices[a]
+        scores = samples.mean(axis=0)
+
+        S = build_feasible_set(self.prices, self.budget, scores)
 
         return np.array([max(S, key=lambda a: samples[u, a]) for u in range(self.n_users)])
 
