@@ -74,6 +74,18 @@ def base_configurations():
     }
 
 
+def filter_within_10_percent(top_configs):
+    filtered = {}
+    for AgentClass, configs in top_configs.items():
+        if not configs:
+            filtered[AgentClass] = []
+            continue
+        top_reward = configs[0][1]  # assuming configs sorted descending by reward
+        threshold = top_reward * 0.9
+        filtered_configs = [(params, reward) for params, reward in configs if reward >= threshold]
+        filtered[AgentClass] = filtered_configs
+    return filtered
+
 
 
 def run_tests(num_runs_per_test=1, top_k=5, agents_params=None):
@@ -131,31 +143,38 @@ def format_top_configs(top_configs, label):
 
 
 if __name__ == "__main__":
-    # Quick run: 1 run/test, keep top 5 from full configs
     print("Starting Initial Run: 1 run per configuration")
-    quick_top = run_tests(num_runs_per_test=1, top_k=5)
-    format_top_configs(quick_top, "Quick Run (1x per test, top 5)")
-    
-    # Extract agents_params from quick_top for middle run
-    middle_agents_params = {AgentClass: [params for params, _ in configs] for AgentClass, configs in quick_top.items()}
-    
-    # Middle run: 5 runs/test, keep top 3 from quick run's top 5 configs
-    print("Starting Middle Run: 10 runs per configuration")
-    middle_top = run_tests(num_runs_per_test=10, top_k=3, agents_params=middle_agents_params)
-    format_top_configs(middle_top, "Middle Run (5x per test, top 3)")
-    
-    # Extract agents_params from middle_top for final run
-    final_agents_params = {AgentClass: [params for params, _ in configs] for AgentClass, configs in middle_top.items()}
-    
-    # Final run: 20 runs/test, keep top 3 from middle run's top 3 configs
-    print("Starting Final Run: 50 runs per configuration")
-    final_top = run_tests(num_runs_per_test=50, top_k=3, agents_params=final_agents_params)
-    format_top_configs(final_top, "Final Run (20x per test, top 3)")
-    
-    # Finally, print top 3 configs from final run
-    print("\n=== 🎉 Final Best 3 Configurations Across All Tests 🎉 ===")
-    for AgentClass, configs in final_top.items():
-        print(f"\n{AgentClass.__name__}:")
-        for i, (params, total_reward) in enumerate(configs[:3], 1):
-            print(f"  {i}. Total Reward = {total_reward:.2f} with params {format_params(params)}")
+    quick_top = run_tests(num_runs_per_test=1)
+    format_top_configs(quick_top, "Quick Run (1x per test)")
 
+    # Filter configs within 10% of top reward
+    quick_filtered = filter_within_10_percent(quick_top)
+
+    # Extract params for next stage
+    middle_agents_params = {
+        AgentClass: [params for params, _ in configs]
+        for AgentClass, configs in quick_filtered.items()
+    }
+
+    print("Starting Middle Run: 10 runs per configuration")
+    middle_top = run_tests(num_runs_per_test=10, agents_params=middle_agents_params)
+    format_top_configs(middle_top, "Middle Run (10x per test)")
+
+    middle_filtered = filter_within_10_percent(middle_top)
+    final_agents_params = {
+        AgentClass: [params for params, _ in configs]
+        for AgentClass, configs in middle_filtered.items()
+    }
+
+    print("Starting Final Run: 50 runs per configuration")
+    final_top = run_tests(num_runs_per_test=50, agents_params=final_agents_params)
+    format_top_configs(final_top, "Final Run (50x per test)")
+
+    print("\n=== 🎉 Final Best Configurations Within 10% of Top Reward 🎉 ===")
+    for AgentClass, configs in final_top.items():
+        top_reward = configs[0][1] if configs else 0
+        threshold = top_reward * 0.9
+        filtered_configs = [(params, reward) for params, reward in configs if reward >= threshold]
+        print(f"\n{AgentClass.__name__}:")
+        for i, (params, total_reward) in enumerate(filtered_configs, 1):
+            print(f"  {i}. Total Reward = {total_reward:.2f} with params {format_params(params)}")
