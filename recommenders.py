@@ -37,17 +37,22 @@ class Recommender:
                  explore_rounds: int = 10,
                  max_iters: int = 50):
         """
-        Explore-Then-Exploit recommender under budget constraint with
-        local hill-climbing and time-aware max_iters.
+        Recommender agent that combines Thompson Sampling with Hill Climbing optimization
+        to select a feasible set of items maximizing expected user reward under a budget.
+
+        Key Features:
+        - Thompson Sampling estimates per-user click probabilities via Beta distributions.
+        - Greedy feasible set construction followed by hill climbing for local improvement.
+        - Supports multi-user selection under a shared cost constraint.
 
         Args:
-            n_weeks       (int): Number of rounds (interface compatibility).
-            n_users       (int): Number of users (N).
-            prices        (np.ndarray[K,]): Cost per podcast.
-            budget        (float): Budget per round (B).
-            smoothing     (float): Prior pseudocount (α ≥ 0).
-            explore_rounds(int): Number of initial pure exploration rounds.
-            max_iters     (int): Max iterations for hill-climbing per recommend().
+            n_weeks (int): Total number of rounds (used for interface compatibility).
+            n_users (int): Number of users in the environment.
+            prices (np.ndarray): Array of item prices.
+            budget (float): Budget constraint per round.
+            smoothing (float): Pseudocount added to Beta priors (α).
+            explore_rounds (int): Initial rounds of uniform exploration before learning.
+            max_iters (int): Maximum number of hill climbing iterations per round.
         """
         self.T = n_weeks
         self.N = n_users
@@ -183,9 +188,26 @@ class Recommender:
         self.failures[users[failure_mask], self.last_recs[failure_mask]] += 1.0
 
 
-import numpy as np
 
 class EpsilonGreedy:
+    """
+    Epsilon-Greedy agent for multi-user bandits with budget-constrained item selection.
+
+    At each round, with probability ε, chooses arms uniformly at random.
+    Otherwise, recommends based on estimated expected rewards for each user.
+
+    Key Features:
+    - Fixed exploration rate ε.
+    - Greedy selection within a feasible set of arms per user.
+    - Tracks and updates empirical mean rewards.
+
+    Args:
+        n_users (int): Number of users.
+        n_arms (int): Number of available arms/items.
+        epsilon (float): Probability of choosing a random arm (exploration).
+        prices (np.ndarray): Array of item prices.
+        budget (float): Budget constraint per round.
+    """
     def __init__(self, n_users, n_arms, epsilon=0.1, prices=None, budget=None):
         self.n_users = n_users
         self.n_arms = n_arms
@@ -215,12 +237,32 @@ class EpsilonGreedy:
 
 
 class EpsilonGreedyImproved:
-    def __init__(self, n_users, n_arms, epsilon=0.3, epsilon_min=0.01, epsilon_decay=0.99, prices=None, budget=None):
+    """
+    Improved Epsilon-Greedy agent using UCB-based exploration and decaying ε schedule.
+
+    During exploration, uses UCB-like bonus to guide exploration toward uncertain arms.
+    Exploration probability decays over time to promote exploitation.
+
+    Key Features:
+    - Decaying ε with configurable minimum and decay rate.
+    - UCB-style exploration scores during random exploration phase.
+    - Supports multi-user selection with feasible set constraints.
+
+    Args:
+        n_users (int): Number of users.
+        n_arms (int): Number of available arms/items.
+        epsilon (float): Initial exploration probability.
+        epsilon_min (float): Minimum allowed value of ε.
+        decay (float): Multiplicative decay factor applied to ε after each update.
+        prices (np.ndarray): Array of item prices.
+        budget (float): Budget constraint per round.
+    """
+    def __init__(self, n_users, n_arms, epsilon=0.3, epsilon_min=0.01, decay=0.99, prices=None, budget=None):
         self.n_users = n_users
         self.n_arms = n_arms
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
-        self.epsilon_decay = epsilon_decay
+        self.decay = decay
         self.prices = prices
         self.budget = budget
 
@@ -229,19 +271,24 @@ class EpsilonGreedyImproved:
         self.total_counts = 0
 
     def recommend(self):
-        scores = np.zeros(self.n_arms)
+        recommendations = []
 
-        if np.random.rand() < self.epsilon:
-            # Exploration with UCB-like scores
-            total_counts = np.sum(self.counts) + 1  # avoid div by zero
-            ucb_scores = self.values.mean(axis=0) + np.sqrt(2 * np.log(total_counts) / (self.counts.sum(axis=0) + 1e-5))
-            scores = ucb_scores
-        else:
-            # Exploitation: mean values
-            scores = self.values.mean(axis=0)
+        for u in range(self.n_users):
+            if np.random.rand() < self.epsilon:
+                # Exploration: use UCB scores per user
+                user_counts = self.counts[u] + 1e-5  # prevent div by zero
+                user_values = self.values[u]
+                ucb_scores = user_values + np.sqrt(2 * np.log(self.total_counts + 1) / user_counts)
+                S = build_feasible_set(self.prices, self.budget, ucb_scores)
+                chosen_arm = max(S, key=lambda a: ucb_scores[a])
+            else:
+                # Exploitation: use learned mean reward estimates
+                S = build_feasible_set(self.prices, self.budget, self.values[u])
+                chosen_arm = max(S, key=lambda a: self.values[u, a])
 
-        S = build_feasible_set(self.prices, self.budget, scores)
-        return np.array([max(S, key=lambda a: self.values[u, a]) for u in range(self.n_users)])
+            recommendations.append(chosen_arm)
+
+        return np.array(recommendations)
 
     def update(self, users, arms, rewards):
         for u, a, r in zip(users, arms, rewards):
@@ -251,12 +298,31 @@ class EpsilonGreedyImproved:
             self.values[u, a] = ((n - 1) / n) * v + (1 / n) * r
             self.total_counts += 1
 
-        # Decay epsilon gradually after each update
-        self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
+        # Decay epsilon
+        self.epsilon = max(self.epsilon * self.decay, self.epsilon_min)
+
 
         
 
 class UCB:
+    """
+    Upper Confidence Bound (UCB) agent for budget-constrained multi-user recommendation.
+
+    Selects arms using UCB1 strategy that balances exploitation of known high-value arms
+    with exploration of uncertain ones, controlled via a confidence multiplier.
+
+    Key Features:
+    - UCB scores computed per user using reward uncertainty.
+    - Feasible set built using average UCB scores.
+    - Deterministic arm selection based on max UCB value.
+
+    Args:
+        n_users (int): Number of users.
+        n_arms (int): Number of arms/items to choose from.
+        prices (np.ndarray): Array of item prices.
+        budget (float): Budget constraint per round.
+        c (float): Exploration coefficient in UCB formula.
+    """
     def __init__(self, n_users, n_arms, prices, budget, c=1.0):
         self.n_users = n_users
         self.n_arms = n_arms
@@ -287,6 +353,24 @@ class UCB:
 
 
 class ThompsonSampling:
+    """
+    Thompson Sampling agent for multi-user recommendation with budget constraints.
+
+    Samples click-through probabilities from per-arm Beta distributions and uses these
+    to construct a feasible set and assign arms to users with maximum sampled reward.
+
+    Key Features:
+    - Bayesian strategy using Beta priors for click probability estimation.
+    - Posterior updates based on binary feedback (success/failure).
+    - Budget-aware feasible set construction per round.
+
+    Args:
+        n_users (int): Number of users.
+        n_arms (int): Number of available arms/items.
+        prices (np.ndarray): Array of item prices.
+        budget (float): Budget constraint per round.
+        alpha (float): Prior smoothing factor for Beta distributions.
+    """
     def __init__(self, n_users, n_arms, prices, budget, alpha=0.1):
         self.n_users = n_users
         self.n_arms = n_arms

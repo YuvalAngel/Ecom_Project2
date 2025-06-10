@@ -42,7 +42,7 @@ def run_tests(agents_params, num_runs_per_test=1, top_k=5):
                     best_params = params
 
             status = "✅" if best_reward >= required_results[i] else "❌"
-            print(f"{AgentClass.__name__:>16}: Best Reward = {best_reward:.2f} {status} Using Config: {format_params(best_params)}")
+            print(f"{AgentClass.__name__:>16}: Best Average Reward over Iterations = {best_reward:.2f} {status} Using Config: {format_params(best_params)}")
 
     by_agent = {}
     for (AgentClass, params_frozen), total_reward in total_rewards.items():
@@ -127,13 +127,15 @@ def single_run(configs, iterations=50):
     """
     print(f"Starting Run: {iterations} runs per configuration")
     best_configs = run_tests(configs, num_runs_per_test=iterations)
-    format_top_configs(best_configs, f"{iterations}x per test")
+    
+    # 🧹 Filter configs within 10% of top reward
+    filtered_configs = filter_within_10_percent(best_configs)
+
+    # 🖨️ Print formatted top configs
+    format_top_configs(filtered_configs, f"{iterations}x per test (Filtered)")
 
     print("\n=== 🎉 Final Best Configurations Within 10% of Top Reward 🎉 ===")
-    for AgentClass, configs in best_configs.items():
-        top_reward = configs[0][1] if configs else 0
-        threshold = top_reward * 0.9
-        filtered_configs = [(params, reward) for params, reward in configs if reward >= threshold]
+    for AgentClass, configs in filtered_configs.items():
         print(f"\n{AgentClass.__name__}:")
-        for i, (params, total_reward) in enumerate(filtered_configs, 1):
+        for i, (params, total_reward) in enumerate(configs, 1):
             print(f"  {i}. Total Reward = {total_reward:.2f} with params {format_params(params)}")

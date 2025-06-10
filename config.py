@@ -34,11 +34,10 @@ base_configs = {
             {'alpha': 0.27},
         ],
         EpsilonGreedyImproved: [
-            {'epsilon': 0.10, 'decay': 0.99},
-            {'epsilon': 0.15, 'decay': 0.95},
-            {'epsilon': 0.05, 'decay': 0.995},
-            {'epsilon': 0.12, 'decay': 0.98},
-            {'epsilon': 0.08, 'decay': 0.99},
+            {'epsilon': 0.30, 'decay': 0.95},
+            {'epsilon': 0.50, 'decay': 0.95},
+            {'epsilon': 0.30, 'decay': 0.97},
+            {'epsilon': 0.50, 'decay': 0.97},
         ],
     }
 
@@ -48,10 +47,12 @@ def get_base_agent_configurations():
     
     configs = base_configs
 
+
+    # Comment in agents you wish to run
     agents = [
         # Recommender,
-        EpsilonGreedy,
-        # UCB,
+        # EpsilonGreedy,
+        UCB,
         # ThompsonSampling,
         # EpsilonGreedyImproved
     ]
