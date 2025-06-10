@@ -1,4 +1,4 @@
-from recommender import *
+from recommenders import *
 
 
 base_configs = {
@@ -33,4 +33,27 @@ base_configs = {
             {'alpha': 0.24},
             {'alpha': 0.27},
         ],
+        EpsilonGreedyImproved: [
+            {'epsilon': 0.10, 'decay': 0.99},
+            {'epsilon': 0.15, 'decay': 0.95},
+            {'epsilon': 0.05, 'decay': 0.995},
+            {'epsilon': 0.12, 'decay': 0.98},
+            {'epsilon': 0.08, 'decay': 0.99},
+        ],
     }
+
+
+
+def get_base_agent_configurations():
+    
+    configs = base_configs
+
+    agents = [
+        # Recommender,
+        EpsilonGreedy,
+        # UCB,
+        # ThompsonSampling,
+        # EpsilonGreedyImproved
+    ]
+
+    return {agent: configs[agent] for agent in agents}

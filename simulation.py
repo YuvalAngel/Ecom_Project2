@@ -1,90 +1,76 @@
-# simulation.py
-
-import time
 import numpy as np
-from tqdm import tqdm
-from Recommender import Recommender
-from test import test_1, test_2, test_3
 
-TOTAL_TIME_LIMIT = 120  # seconds
+def simulate(AgentClass, test, **kwargs):
+    """
+    Simulate the recommendation process over a series of weeks for a given agent and test scenario.
 
-class Simulation:
-    def __init__(self, P: np.ndarray, prices: np.ndarray, budget: float, n_weeks: int):
-        self.P = P.copy()
-        self.item_prices = prices
-        self.budget = budget
-        self.n_weeks = n_weeks
+    Parameters:
+    - AgentClass: class of the recommendation agent (e.g., Recommender or bandit agent)
+    - test: dictionary containing test configuration (P, budget, prices, n_weeks, etc.)
+    - kwargs: additional parameters to initialize the agent
 
-    def _validate_recommendation(self, rec: np.ndarray) -> bool:
-        if not isinstance(rec, np.ndarray) or not np.issubdtype(rec.dtype, np.integer):
-            return False
-        if rec.shape != (self.P.shape[0],) or ((rec < 0)|(rec >= self.P.shape[1])).any():
-            return False
-        cost = np.sum(self.item_prices[np.unique(rec)])
-        return cost <= self.budget
+    Returns:
+    - cumulative_reward: total sum of positive feedback (rewards) over all weeks and users
+    """
+    P = test['P']
+    N, K = P.shape
+    B = test['budget']
+    prices = test['item_prices']
+    T = test['n_weeks']
 
-    def simulate(self, smoothing: float, explore_rounds: int, max_iters: int) -> (float, float):
-        total_time = 0.0
-        rec = Recommender(
-            n_weeks=self.n_weeks,
-            n_users=self.P.shape[0],
-            prices=self.item_prices,
-            budget=self.budget,
-            smoothing=smoothing,
-            explore_rounds=explore_rounds,
-            max_iters=max_iters
-        )
-        reward = 0.0
+    if AgentClass.__name__ == "Recommender":
+        agent = AgentClass(n_weeks=T, n_users=N, prices=prices, budget=B, **kwargs)
+    else:
+        agent = AgentClass(n_users=N, n_arms=K, prices=prices, budget=B, **kwargs)
 
-        for _ in range(self.n_weeks):
-            start = time.perf_counter()
-            picks = rec.recommend()
-            mid = time.perf_counter()
-            if not self._validate_recommendation(picks):
-                return 0.0, total_time
-            feedback = np.random.binomial(1, self.P[np.arange(self.P.shape[0]), picks])
-            rec.update(feedback)
-            end = time.perf_counter()
+    cumulative_reward = 0
 
-            total_time += (mid - start) + (end - mid)
-            if total_time > TOTAL_TIME_LIMIT:
-                break
-            reward += feedback.sum()
+    for _ in range(T):
+        recs = agent.recommend()
+        probs = np.array([P[u, a] for u, a in enumerate(recs)])
+        feedback = (np.random.rand(N) < probs).astype(int)
+        cumulative_reward += feedback.sum()
 
-        return reward, total_time
+        if AgentClass.__name__ == "Recommender":
+            agent.update(feedback)
+        else:
+            agent.update(users=np.arange(N), arms=recs, rewards=feedback)
 
-if __name__ == '__main__':
-    # configs = [
-    #     (0.5, 5, 100),
-    #     (1.0, 5, 10),
-    #     (1.0, 5, 50),
-    #     (1.0, 5, 100),
-    #     (1.0, 10, 50),
-    #     (1.0, 20, 10),
-    #     (1.0, 20, 20),
-    #     (1.0, 20, 100)
-    # ]
-    configs = [
-        (1.0, 20, 10),
-        (1.0, 5, 100),
-        (1.0, 5, 50),
-        (1.0, 20, 20)
-    ]
+    return cumulative_reward
 
-    trials = 50
-    tests = [test_1, test_2, test_3]
 
-    for i, test in enumerate(tests, start=1):
-        print(f"\n=== Test {i} ===")
-        for a, er, mi in configs:
-            total_reward = 0.0
-            total_time = 0.0
-            print(f"Running a={a}, er={er}, mi={mi}...")
-            for _ in tqdm(range(trials)):  # <-- Progress bar here
-                sim = Simulation(test['P'], test['item_prices'], test['budget'], test['n_weeks'])
-                r, t = sim.simulate(smoothing=a, explore_rounds=er, max_iters=mi)
-                total_reward += r
-                total_time += t
-            avg_reward = total_reward / trials
-            avg_time = total_time / trials
-            print(f"a={a}, er={er}, mi={mi} -> Avg={avg_reward:.1f}, Time={avg_time:.2f}s")
+def format_params(params):
+    """
+    Format parameters dictionary into a string-friendly representation.
+
+    Floats are formatted to 2 decimal places.
+
+    Parameters:
+    - params: dict of parameter names and values
+
+    Returns:
+    - dict with formatted string values
+    """
+    return {k: (f"{v:.2f}" if isinstance(v, (float, np.floating)) else v) for k, v in params.items()}
+
+
+def filter_within_10_percent(top_configs):
+    """
+    Filter configurations that have rewards within 10% of the top reward for each agent.
+
+    Parameters:
+    - top_configs: dict mapping AgentClass to list of (params, reward) tuples sorted descending
+
+    Returns:
+    - filtered: dict with same keys but only configs within 90% of top reward kept
+    """
+    filtered = {}
+    for AgentClass, configs in top_configs.items():
+        if not configs:
+            filtered[AgentClass] = []
+            continue
+        top_reward = configs[0][1]
+        threshold = top_reward * 0.9
+        filtered_configs = [(params, reward) for params, reward in configs if reward >= threshold]
+        filtered[AgentClass] = filtered_configs
+    return filtered

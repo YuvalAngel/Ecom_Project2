@@ -214,7 +214,47 @@ class EpsilonGreedy:
             self.values[u, a] = ((n - 1) / n) * v + (1 / n) * r
 
 
+class EpsilonGreedyImproved:
+    def __init__(self, n_users, n_arms, epsilon=0.3, epsilon_min=0.01, epsilon_decay=0.99, prices=None, budget=None):
+        self.n_users = n_users
+        self.n_arms = n_arms
+        self.epsilon = epsilon
+        self.epsilon_min = epsilon_min
+        self.epsilon_decay = epsilon_decay
+        self.prices = prices
+        self.budget = budget
 
+        self.counts = np.zeros((n_users, n_arms))
+        self.values = np.zeros((n_users, n_arms))
+        self.total_counts = 0
+
+    def recommend(self):
+        scores = np.zeros(self.n_arms)
+
+        if np.random.rand() < self.epsilon:
+            # Exploration with UCB-like scores
+            total_counts = np.sum(self.counts) + 1  # avoid div by zero
+            ucb_scores = self.values.mean(axis=0) + np.sqrt(2 * np.log(total_counts) / (self.counts.sum(axis=0) + 1e-5))
+            scores = ucb_scores
+        else:
+            # Exploitation: mean values
+            scores = self.values.mean(axis=0)
+
+        S = build_feasible_set(self.prices, self.budget, scores)
+        return np.array([max(S, key=lambda a: self.values[u, a]) for u in range(self.n_users)])
+
+    def update(self, users, arms, rewards):
+        for u, a, r in zip(users, arms, rewards):
+            self.counts[u, a] += 1
+            n = self.counts[u, a]
+            v = self.values[u, a]
+            self.values[u, a] = ((n - 1) / n) * v + (1 / n) * r
+            self.total_counts += 1
+
+        # Decay epsilon gradually after each update
+        self.epsilon = max(self.epsilon * self.epsilon_decay, self.epsilon_min)
+
+        
 
 class UCB:
     def __init__(self, n_users, n_arms, prices, budget, c=1.0):
