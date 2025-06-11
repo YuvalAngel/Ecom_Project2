@@ -51,7 +51,7 @@ def format_params(params):
     Returns:
     - dict with formatted string values
     """
-    return {k: (f"{v:.2f}" if isinstance(v, (float, np.floating)) else v) for k, v in params.items()}
+    return {k: (f"{v:.3f}" if isinstance(v, (float, np.floating)) else v) for k, v in params.items()}
 
 
 def filter_within_k_percent(top_configs, k_percent):
