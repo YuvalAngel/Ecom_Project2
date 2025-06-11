@@ -323,26 +323,52 @@ class UCB:
         self.values = np.zeros((n_users, n_arms))
         self.total_counts = 1
 
+        self.similarity = np.eye(n_users) * 0.8 + 0.2 / n_users
+
+        self.sq_values = np.zeros((n_users, n_arms))  # Second moment
+
     def recommend(self):
         self.total_counts += 1
         total = self.counts + 1e-8
-        ucb = self.values + self.c * np.sqrt(np.log(self.total_counts) / total)
+
+        # ucb = self.values + self.c * np.sqrt(np.log(self.total_counts) / total)
+
+        ucb_raw = self.values + self.c * np.sqrt(np.log(self.total_counts) / total)
+        # ucb = self.similarity @ ucb_raw  # Smoothed UCB
+        ucb = (self.similarity @ ucb_raw) / self.similarity.sum(axis=1, keepdims=True) # Similarity normalization, Smoothed UCB
 
         scores = ucb.mean(axis=0)
 
+        # scores = (ucb / (self.prices + 1e-6)).mean(axis=0) # Needs testing
+
         S = build_feasible_set(self.prices, self.budget, scores)
 
-        # S = build_feasible_set_generic(self.prices, self.budget, ucb, agg_fn=np.mean)
+        return np.array([max(S, key=lambda a: ucb[u, a]) for u in range(self.n_users)]) # Working Version
+
+        # return np.array([ # Needs testing
+        #     np.random.choice(
+        #         sorted(S, key=lambda a: ucb[u, a], reverse=True)[:2]  # top-2
+        #     )
+        #     for u in range(self.n_users)])
 
 
-        return np.array([max(S, key=lambda a: ucb[u, a]) for u in range(self.n_users)])
+    # def update(self, users, arms, rewards, decay=0.99):
+    #     # Hard to say which update is better, needs further testing
+    #     for u, a, r in zip(users, arms, rewards):
+    #         self.counts[u, a] = decay * self.counts[u, a] + 1
+    #         self.values[u, a] = decay * self.values[u, a] + (1 - decay) * r
 
     def update(self, users, arms, rewards):
         for u, a, r in zip(users, arms, rewards):
             self.counts[u, a] += 1
             n = self.counts[u, a]
+
+            # Update mean (first moment)
             v = self.values[u, a]
             self.values[u, a] = ((n - 1) / n) * v + (1 / n) * r
+
+
+
 
 
 class ThompsonSampling:

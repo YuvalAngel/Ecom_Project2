@@ -15,8 +15,8 @@ base_configs = {
             # {'c': 0.10},
             {'c': 0.13},
             {'c': 0.14},
+            {'c': 0.20},
             {'c': 0.21},
-            # {'c': 0.29},
         ],
 
         ThompsonSampling: [
@@ -49,8 +49,8 @@ def get_base_agent_configurations():
     # Comment in agents you wish to run
     agents = [
         # Recommender,
-        EpsilonGreedy,
-        # UCB,
+        # EpsilonGreedy,
+        UCB,
         # ThompsonSampling,
     ]
 
