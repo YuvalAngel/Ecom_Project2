@@ -110,7 +110,7 @@ class RecommenderLSBias:
 
         print("Model fitting complete.")
 
-    def predict(self, u, i):
+    def predict(self, u, i, clip=True):
         """
         Predicts the rating for a given user and item using learned biases.
 
@@ -130,7 +130,7 @@ class RecommenderLSBias:
         pred = self.r_avg + user_bias + item_bias
 
         # Clip the prediction to the valid rating range (e.g., 1 to 5)
-        return float(np.clip(pred, 1.0, 5.0))
+        return float(np.clip(pred, 1.0, 5.0) if clip else pred)
 
     def mse(self, data):
         """
@@ -147,7 +147,7 @@ class RecommenderLSBias:
 
         squared_errors = []
         for u, i, r in data:
-            pred = self.predict(u, i)
+            pred = self.predict(u, i, clip=False)
             squared_errors.append((r - pred) ** 2)
         return np.mean(squared_errors)
     

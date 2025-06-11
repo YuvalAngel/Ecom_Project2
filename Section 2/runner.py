@@ -30,8 +30,11 @@ def run_tests(agents_params, num_runs_per_test=1, top_k=5):
             best_reward = -np.inf
             best_params = None
 
-            for params in tqdm(param_list, desc=f"{AgentClass.__name__} Params", leave=False):
-                rewards = [simulate(AgentClass, test, **params) for _ in range(num_runs_per_test)]
+            for params in param_list:
+                rewards = [simulate(AgentClass, test, **params)
+                           for _ in tqdm(range(num_runs_per_test), 
+                             desc=f"{AgentClass.__name__} - {format_params(params)}", 
+                             leave=True)]
                 avg_reward = np.mean(rewards)
 
                 key = (AgentClass, frozenset(params.items()))
@@ -72,7 +75,7 @@ def format_top_configs(top_configs, label):
 
 
 
-def multi_run(configs, first_run=3, second_run=10, third_run=50, k_percent=0.99):
+def multi_run(configs, first_run=3, second_run=10, third_run=25, range=100):
     """
     Multi-stage run to refine best configurations.
 
@@ -93,26 +96,26 @@ def multi_run(configs, first_run=3, second_run=10, third_run=50, k_percent=0.99)
 
     quick_top = run_tests(configs, num_runs_per_test=first_run)
     format_top_configs(quick_top, f"Quick Run ({first_run}x per test)")
-    quick_filtered = filter_within_k_percent(quick_top, k_percent)
+    quick_filtered = filter_within_range(quick_top, range)
 
 
 
     middle_agents_params = {AgentClass: [params for params, _ in configs] for AgentClass, configs in quick_filtered.items()}
     print(f"\nStarting Middle Run: {second_run} runs per configuration")
     middle_top = run_tests(middle_agents_params, num_runs_per_test=second_run)
-    middle_filtered = filter_within_k_percent(middle_top, k_percent)
+    middle_filtered = filter_within_range(middle_top, range)
     format_top_configs(middle_filtered, f"Middle Run ({second_run}x per test)")
 
     final_agents_params = {AgentClass: [params for params, _ in configs] for AgentClass, configs in middle_filtered.items()}
     print(f"\nStarting Final Run: {third_run} runs per configuration")
     final_top = run_tests(final_agents_params, num_runs_per_test=third_run)
-    final_filtered = filter_within_k_percent(final_top, k_percent)
-    print(f"\n=== 🎉 Final Best Configurations Within {k_percent * 100}% of Top Reward 🎉 ===")
+    final_filtered = filter_within_range(final_top, range)
+    print(f"\n=== 🎉 Final Best Configurations Within {range} Points of Top Reward 🎉 ===")
     format_top_configs(final_filtered, f"Final Run ({third_run}x per test)")
 
 
 
-def single_run(configs, iterations=50, k_percent=0.99):
+def single_run(configs, iterations=50, range=100):
     """
     Single-stage run evaluating all base configurations with a specified number of repetitions.
 
@@ -124,10 +127,10 @@ def single_run(configs, iterations=50, k_percent=0.99):
     best_configs = run_tests(configs, num_runs_per_test=iterations)
     
     # 🧹 Filter configs within 10% of top reward
-    filtered_configs = filter_within_k_percent(best_configs, k_percent)
+    filtered_configs = filter_within_range(best_configs, range)
 
     # 🖨️ Print formatted top configs
     # format_top_configs(filtered_configs, f"{iterations}x per test (Filtered)")
 
-    print(f"\n=== 🎉 Final Best Configurations Within {k_percent * 100}% of Top Reward 🎉 ===")
-    format_top_configs(filtered_configs, f"Final Run ({iterations}x per test)")
+    # print(f"\n=== 🎉 Final Best Configurations Within {range} Points of Top Reward 🎉 ===")
+    format_top_configs(filtered_configs, f"{iterations}x per test")

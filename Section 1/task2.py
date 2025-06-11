@@ -76,7 +76,7 @@ class Recommender:
 
         print("SVD approximation complete.")
 
-    def predict(self, u, i):
+    def predict(self, u, i, clip=True):
         """
         Predicts the rating for a given user and item using the SVD-approximated matrix.
         Handles cold-start (unseen users/items).
@@ -86,13 +86,13 @@ class Recommender:
 
         # Handle cold-start: if user or item not seen in training, return global mean
         if u_idx is None or i_idx is None:
-            return float(self.global_mean) # Fallback for unseen users/items
+            return self.global_mean # Fallback for unseen users/items
         
         # Predict from the SVD-approximated matrix
         pred = self.R_hat[u_idx, i_idx]
 
         # Clip predictions to the valid rating range (1.0 to 5.0)
-        return float(np.clip(pred, 1.0, 5.0))
+        return float(np.clip(pred, 1.0, 5.0) if clip else pred)
 
     def mse(self, data):
         """
@@ -104,7 +104,7 @@ class Recommender:
 
         squared_errors = []
         for u, i, r in data:
-            pred = self.predict(u, i)
+            pred = self.predict(u, i, clip=False)
             squared_errors.append((r - pred) ** 2)
         return np.mean(squared_errors)
 
@@ -155,8 +155,8 @@ def solve(train_path='train.csv', test_path='test.csv', pred_path='pred2.csv'):
     mse_train = rec.mse(train_data)
     
     # Append MSE to mse.txt
-    # with open('mse.txt', 'a') as f: # 'a' for append mode
-        # f.write(f"Train MSE (SVD k=10): {mse_train}\n") # Added label for clarity
+    with open('mse.txt', 'a') as f:
+        f.write(f"{mse_train}")
     print(f"Train MSE for Task 2 (SVD k=10): {mse_train}")
 
     # Predict ratings for test set (Stage 3 part 2)

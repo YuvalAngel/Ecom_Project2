@@ -13,3 +13,9 @@ Implemented a new feasible set function, currently only improves Thompson Sampli
 Left the lines there in the recommenders, needs more tests to see if we can maybe improve the current implementation to actually make them better.
 -- EpsilonGreedy: EpsilonGreedy is underperforming consistently, and EpsilonGreedyImproved is Performing very well. This has been the case up until now, and i don't think there's really a point in keeping it
 So, removing EpsilonGreedy, and naming the new EpsilonGreedyImproved EpsilonGreedy.
+
+06/11/2025 Night:
+Changed Implementation with Gemini, possibly made the THCR model shit. Will need comparing. Good part is that the EG model works well
+To summarize today: Finished section 1 totally, found best THCR config with current setup, found that UCB works best with c < 0.2.
+Thompson Sampling needs further testing for hyperparameters, EpsilonGreedy we have some configs that are good but if we decide to roll with that one, we can run many many more configurations and find best.
+
