@@ -18,7 +18,7 @@ def simulate(AgentClass, test, **kwargs):
     prices = test['item_prices']
     T = test['n_weeks']
 
-    if AgentClass.__name__ == "Recommender":
+    if AgentClass.__name__ == "THCR":
         agent = AgentClass(n_weeks=T, n_users=N, prices=prices, budget=B, **kwargs)
     else:
         agent = AgentClass(n_users=N, n_arms=K, prices=prices, budget=B, **kwargs)
@@ -31,7 +31,7 @@ def simulate(AgentClass, test, **kwargs):
         feedback = (np.random.rand(N) < probs).astype(int)
         cumulative_reward += feedback.sum()
 
-        if AgentClass.__name__ == "Recommender":
+        if AgentClass.__name__ == "THCR":
             agent.update(feedback)
         else:
             agent.update(users=np.arange(N), arms=recs, rewards=feedback)
@@ -54,13 +54,13 @@ def format_params(params):
     return {k: (f"{v:.3f}" if isinstance(v, (float, np.floating)) else v) for k, v in params.items()}
 
 
-def filter_within_k_percent(top_configs, k_percent):
+def filter_within_range(top_configs, range=100):
     """
-    Filter configurations that have rewards within 10% of the top reward for each agent.
+    Filter configurations that have rewards within value of the top reward for each agent.
 
     Parameters:
     - top_configs: dict mapping AgentClass to list of (params, reward) tuples sorted descending
-    - k_percent: float percentage to filter by
+    - range: int range of top reward we want to filter 
 
     Returns:
     - filtered: dict with same keys but only configs within 90% of top reward kept
@@ -71,7 +71,7 @@ def filter_within_k_percent(top_configs, k_percent):
             filtered[AgentClass] = []
             continue
         top_reward = configs[0][1]
-        threshold = top_reward * k_percent
+        threshold = top_reward - range
         filtered_configs = [(params, reward) for params, reward in configs if reward >= threshold]
         filtered[AgentClass] = filtered_configs
     return filtered

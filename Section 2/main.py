@@ -4,5 +4,5 @@ from config import *
 
 if __name__ == "__main__":
     configs = get_base_agent_configurations()
-    single_run(configs, iterations=30, k_percent=0.99)
-    # multi_run(configs, k_percent=0.99)
+    single_run(configs, iterations=50, range=100)
+    # multi_run(configs, range=100)
