@@ -56,6 +56,7 @@ def build_feasible_set_generic(prices: np.ndarray, budget: float, scores: np.nda
 
 
 
+
 class Recommender:
     def __init__(self,
                  n_weeks: int,
@@ -180,8 +181,8 @@ class Recommender:
             random_scores = np.random.rand(self.N, self.K)
             avg_scores = random_scores.mean(axis=0)
 
-            # S = build_feasible_set(self.costs, self.B, avg_scores)
-            S = build_feasible_set_generic(self.costs, self.B, random_scores)
+            S = build_feasible_set(self.costs, self.B, avg_scores)
+            # S = build_feasible_set_generic(self.costs, self.B, random_scores)
 
             recs = np.random.choice(S, size=self.N)
             self.last_recs = recs
@@ -200,7 +201,9 @@ class Recommender:
         avg_scores = p_hat.mean(axis=0)
 
         best_S = build_feasible_set(self.costs, self.B, avg_scores)
+
         # best_S = build_feasible_set_generic(self.costs, self.B, p_hat, agg_fn=np.mean)
+
 
 
         # hill-climb refine
@@ -274,6 +277,7 @@ class EpsilonGreedy:
             else:
                 # Exploitation: use learned mean reward estimates
                 S = build_feasible_set(self.prices, self.budget, self.values[u])
+
                 # S = build_feasible_set_generic(self.prices, self.budget, self.values[u])
 
 
@@ -334,6 +338,7 @@ class UCB:
         scores = ucb.mean(axis=0)
 
         S = build_feasible_set(self.prices, self.budget, scores)
+
         # S = build_feasible_set_generic(self.prices, self.budget, ucb, agg_fn=np.mean)
 
 
@@ -379,9 +384,10 @@ class ThompsonSampling:
         samples = np.random.beta(self.successes + self.alpha,
                                  self.failures + self.alpha)
 
-        scores = samples.mean(axis=0)
+        # scores = samples.mean(axis=0)
 
         # S = build_feasible_set(self.prices, self.budget, scores)
+
         S = build_feasible_set_generic(self.prices, self.budget, samples, agg_fn=np.mean)
 
 
