@@ -132,7 +132,7 @@ def single_run(configs, iterations=50):
     filtered_configs = filter_within_10_percent(best_configs)
 
     # 🖨️ Print formatted top configs
-    format_top_configs(filtered_configs, f"{iterations}x per test (Filtered)")
+    # format_top_configs(filtered_configs, f"{iterations}x per test (Filtered)")
 
     print("\n=== 🎉 Final Best Configurations Within 10% of Top Reward 🎉 ===")
     for AgentClass, configs in filtered_configs.items():
