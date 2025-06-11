@@ -89,21 +89,21 @@ def multi_run(configs, first_run=3, second_run=10, third_run=50):
     - second_run: int, runs per config in middle run
     - third_run: int, runs per config in final run
     """
-    print(f"Starting Initial Run: {first_run} runs per configuration")
+    print(f"\nStarting Initial Run: {first_run} runs per configuration")
     quick_top = run_tests(configs, num_runs_per_test=first_run)
     format_top_configs(quick_top, f"Quick Run ({first_run}x per test)")
 
     quick_filtered = filter_within_10_percent(quick_top)
     middle_agents_params = {AgentClass: [params for params, _ in configs] for AgentClass, configs in quick_filtered.items()}
 
-    print(f"Starting Middle Run: {second_run} runs per configuration")
+    print(f"\nStarting Middle Run: {second_run} runs per configuration")
     middle_top = run_tests(middle_agents_params, num_runs_per_test=second_run)
     format_top_configs(middle_top, f"Middle Run ({second_run}x per test)")
 
     middle_filtered = filter_within_10_percent(middle_top)
     final_agents_params = {AgentClass: [params for params, _ in configs] for AgentClass, configs in middle_filtered.items()}
 
-    print(f"Starting Final Run: {third_run} runs per configuration")
+    print(f"\nStarting Final Run: {third_run} runs per configuration")
     final_top = run_tests(final_agents_params, num_runs_per_test=third_run)
     format_top_configs(final_top, f"Final Run ({third_run}x per test)")
 
@@ -125,7 +125,7 @@ def single_run(configs, iterations=50):
     - configs: dict, mapping AgentClass to configuration
     - iterations: int, number of runs per configuration per test
     """
-    print(f"Starting Run: {iterations} runs per configuration")
+    print(f"\nStarting Run: {iterations} runs per configuration")
     best_configs = run_tests(configs, num_runs_per_test=iterations)
     
     # 🧹 Filter configs within 10% of top reward
