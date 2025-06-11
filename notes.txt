@@ -1,0 +1,15 @@
+As of 05/11/2025:
+Current best algorithm is probably UCB, followed by the Recommender class model, then base Thompson.
+Epsilon-Greedy Performs poorly, the introduction of the improved model, which uses 
+Need to see what's the reason for it, might give us insight as to how to improve other models.
+
+Plans for tomorrow:
+Try improving the good performing models, look into research in the area and see if there are other models we can implement.
+
+Today's best result: UCB with c = 0.21, Test 1 avg: 7427.64, Test 2 avg: 2306, Test 3 avg: 4610, Total: 14292
+
+06/11/2025:
+Implemented a new feasible set function, currently only improves Thompson Sampling, Recommender tiny difference and the others are worse off.
+Left the lines there in the recommenders, needs more tests to see if we can maybe improve the current implementation to actually make them better.
+-- EpsilonGreedy: EpsilonGreedy is underperforming consistently, and EpsilonGreedyImproved is Performing very well. This has been the case up until now, and i don't think there's really a point in keeping it
+So, removing EpsilonGreedy, and naming the new EpsilonGreedyImproved EpsilonGreedy.

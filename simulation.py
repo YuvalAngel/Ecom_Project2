@@ -1,121 +1,77 @@
-import time
-from test import test_1, test_2, test_3
-
-from Recommender import Recommender
 import numpy as np
 
+def simulate(AgentClass, test, **kwargs):
+    """
+    Simulate the recommendation process over a series of weeks for a given agent and test scenario.
 
-TOTAL_TIME_LIMIT = 120 # seconds
+    Parameters:
+    - AgentClass: class of the recommendation agent (e.g., Recommender or bandit agent)
+    - test: dictionary containing test configuration (P, budget, prices, n_weeks, etc.)
+    - kwargs: additional parameters to initialize the agent
 
-class Simulation():
-    def __init__(self, P: np.array, prices: np.array, budget, n_weeks: int):
-        self.P = P.copy()
-        self.item_prices = prices
-        self.budget = budget
-        self.n_weeks = n_weeks
+    Returns:
+    - cumulative_reward: total sum of positive feedback (rewards) over all weeks and users
+    """
+    P = test['P']
+    N, K = P.shape
+    B = test['budget']
+    prices = test['item_prices']
+    T = test['n_weeks']
 
-    def _validate_recommendation(self, recommendation):
-        if not isinstance(recommendation, np.ndarray):
-            print(f'ERROR: {recommendation} is not an np.array')
-            return False
-        
-        if not np.issubdtype(recommendation.dtype, np.integer):
-            print(f'ERROR: type of {recommendation} is not int')
-            return False
-        
-        if recommendation.shape != (self.P.shape[0],):
-            print(f'ERROR: {recommendation} is not 1D array or has wrong length')
-            return False
-        
-        if ((recommendation < 0) | (recommendation >= self.P.shape[1])).any():
-            print(f'ERROR: {recommendation} contains invalid podcasts')
-            return False
+    if AgentClass.__name__ == "Recommender":
+        agent = AgentClass(n_weeks=T, n_users=N, prices=prices, budget=B, **kwargs)
+    else:
+        agent = AgentClass(n_users=N, n_arms=K, prices=prices, budget=B, **kwargs)
 
-        podcasts = np.unique(recommendation)
-        total_price = np.sum(self.item_prices[podcasts])
-        
-        if total_price > self.budget:
-            print(f'ERROR: {total_price} is above budget of {self.budget}')
-            return False
-            
-        return True
-    
-    def simulate(self) -> int:
-        total_time_taken = 0
-        
-        init_start = time.perf_counter()
-        
-        try:
-            recommender = Recommender(n_weeks=self.n_weeks, n_users=self.P.shape[0], 
-                                      prices=self.item_prices.copy(), 
-                                      budget=self.budget)
-        except Exception as e:
-            print('Recommender __init__ caused error')
-            raise e
-        
-        init_end = time.perf_counter()
-        
-        total_time_taken += init_end - init_start
-        
-        reward = 0
-              
-        for round_idx in range(self.n_weeks):
-            try:
-                recommendation_start = time.perf_counter()
-                recommendation = recommender.recommend()
-                recommendation_end = time.perf_counter()
-            except Exception as e:
-                print(f'Recommmender.recommend() raised error at round {round_idx}')
-                raise e 
-                
-            if recommendation is None:
-                print('No recommendation supplied.')
-                return 0
-                
-            recommendation_time = recommendation_end - recommendation_start
-                
-            if not self._validate_recommendation(recommendation):
-                print(f'Error: Invalid recommendation at round {round_idx}')
-                return 0
-            
-            results = np.random.binomial(n=1, p=self.P[np.arange(self.P.shape[0]), recommendation])
-            current_reward = np.sum(results)
-            next_reward = reward + current_reward
-            
-            try:
-                update_start_time = time.perf_counter()
-                recommender.update(results)
-                update_end_time = time.perf_counter()
-            except Exception as e:
-                print(f'Recommmender.update() raised error at round {round_idx}')
-                raise e
-            
-            update_time = update_end_time - update_start_time
+    cumulative_reward = 0
 
-            time_for_current_round = recommendation_time + update_time
+    for _ in range(T):
+        recs = agent.recommend()
+        probs = np.array([P[u, a] for u, a in enumerate(recs)])
+        feedback = (np.random.rand(N) < probs).astype(int)
+        cumulative_reward += feedback.sum()
 
-            if total_time_taken + time_for_current_round > TOTAL_TIME_LIMIT:
-                print(f'TOTAL TIME LIMIT EXCEEDED. Returning reward at after {round_idx} rounds')
-                return reward
-            else:
-                total_time_taken += time_for_current_round
-                reward = next_reward
-        
-        # print(f'Total time taken: {total_time_taken} seconds')
-        return reward, total_time_taken
-    
-if __name__ == '__main__':
-    iterations = 20
-    for test in [test_1, test_2, test_3]:
-        total_rewards = 0
-        total_time_taken = 0
-        simulation = Simulation(test['P'], test['item_prices'], test['budget'], test['n_weeks'])
-        for _ in range(iterations):
-            current_reward, current_time = simulation.simulate()
-            total_rewards += current_reward
-            total_time_taken += current_time
-        reward = total_rewards / iterations
-        print(f'Average Reward = {reward}, Total Time of Test: {total_time_taken}, Number of Iterations: {iterations}')
-        avg_time_per_iteration = total_time_taken / iterations
-        print(f'Time Per Run: {avg_time_per_iteration} Seconds')
+        if AgentClass.__name__ == "Recommender":
+            agent.update(feedback)
+        else:
+            agent.update(users=np.arange(N), arms=recs, rewards=feedback)
 
+    return cumulative_reward
+
+
+def format_params(params):
+    """
+    Format parameters dictionary into a string-friendly representation.
+
+    Floats are formatted to 2 decimal places.
+
+    Parameters:
+    - params: dict of parameter names and values
+
+    Returns:
+    - dict with formatted string values
+    """
+    return {k: (f"{v:.3f}" if isinstance(v, (float, np.floating)) else v) for k, v in params.items()}
+
+
+def filter_within_k_percent(top_configs, k_percent):
+    """
+    Filter configurations that have rewards within 10% of the top reward for each agent.
+
+    Parameters:
+    - top_configs: dict mapping AgentClass to list of (params, reward) tuples sorted descending
+    - k_percent: float percentage to filter by
+
+    Returns:
+    - filtered: dict with same keys but only configs within 90% of top reward kept
+    """
+    filtered = {}
+    for AgentClass, configs in top_configs.items():
+        if not configs:
+            filtered[AgentClass] = []
+            continue
+        top_reward = configs[0][1]
+        threshold = top_reward * k_percent
+        filtered_configs = [(params, reward) for params, reward in configs if reward >= threshold]
+        filtered[AgentClass] = filtered_configs
+    return filtered
