@@ -191,13 +191,6 @@ class Recommender:
         # Thompson Sampling: sample p_hat ~ Beta(successes + alpha, failures + alpha)
         p_hat = np.random.beta(self.successes + self.alpha, self.failures + self.alpha)
 
-        # Or to use UCB instead, comment out above and uncomment below:
-        # total = self.successes + self.failures + 2*self.alpha
-        # mean = (self.successes + self.alpha) / (total + 1e-8)
-        # confidence = np.sqrt(2 * np.log(self.round + 1) / (total + 1e-8))
-        # p_hat = mean + confidence
-        # p_hat = np.clip(p_hat, 0, 1)
-
         avg_scores = p_hat.mean(axis=0)
 
         best_S = build_feasible_set(self.costs, self.B, avg_scores)
