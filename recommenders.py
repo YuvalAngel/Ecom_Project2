@@ -26,6 +26,35 @@ def build_feasible_set(prices: np.ndarray, budget: float, scores: np.ndarray) ->
     return S
 
 
+def build_feasible_set_generic(prices: np.ndarray, budget: float, scores: np.ndarray, agg_fn=np.mean) -> list:
+    """
+    Generic greedy feasible set builder using customizable score aggregation.
+
+    Args:
+        prices (np.ndarray): Cost per item (K,).
+        budget (float): Total budget.
+        scores (np.ndarray): Score matrix (N, K) or vector (K,).
+        agg_fn (callable): Aggregation function over users (axis=0), e.g., np.mean, np.max.
+
+    Returns:
+        list: Selected item indices within budget.
+    """
+    if scores.ndim == 2:
+        item_scores = agg_fn(scores, axis=0)
+    else:
+        item_scores = scores
+
+    score_per_cost = item_scores / (prices + 1e-8)
+    idx = np.argsort(-score_per_cost)
+
+    S, total_cost = [], 0.0
+    for j in idx:
+        if total_cost + prices[j] <= budget:
+            S.append(j)
+            total_cost += prices[j]
+    return S
+
+
 
 class Recommender:
     def __init__(self,
@@ -150,7 +179,9 @@ class Recommender:
             # create random scores for each user-item
             random_scores = np.random.rand(self.N, self.K)
             avg_scores = random_scores.mean(axis=0)
-            S = build_feasible_set(self.costs, self.B, avg_scores)
+
+            # S = build_feasible_set(self.costs, self.B, avg_scores)
+            S = build_feasible_set_generic(self.costs, self.B, random_scores)
 
             recs = np.random.choice(S, size=self.N)
             self.last_recs = recs
@@ -167,7 +198,10 @@ class Recommender:
         # p_hat = np.clip(p_hat, 0, 1)
 
         avg_scores = p_hat.mean(axis=0)
+
         best_S = build_feasible_set(self.costs, self.B, avg_scores)
+        # best_S = build_feasible_set_generic(self.costs, self.B, p_hat, agg_fn=np.mean)
+
 
         # hill-climb refine
         best_S = self.__hill__climb(best_S, p_hat)
@@ -188,55 +222,7 @@ class Recommender:
         self.failures[users[failure_mask], self.last_recs[failure_mask]] += 1.0
 
 
-
 class EpsilonGreedy:
-    """
-    Epsilon-Greedy agent for multi-user bandits with budget-constrained item selection.
-
-    At each round, with probability ε, chooses arms uniformly at random.
-    Otherwise, recommends based on estimated expected rewards for each user.
-
-    Key Features:
-    - Fixed exploration rate ε.
-    - Greedy selection within a feasible set of arms per user.
-    - Tracks and updates empirical mean rewards.
-
-    Args:
-        n_users (int): Number of users.
-        n_arms (int): Number of available arms/items.
-        epsilon (float): Probability of choosing a random arm (exploration).
-        prices (np.ndarray): Array of item prices.
-        budget (float): Budget constraint per round.
-    """
-    def __init__(self, n_users, n_arms, epsilon=0.1, prices=None, budget=None):
-        self.n_users = n_users
-        self.n_arms = n_arms
-        self.epsilon = epsilon
-        self.prices = prices
-        self.budget = budget
-        self.counts = np.zeros((n_users, n_arms))
-        self.values = np.zeros((n_users, n_arms))
-
-    def recommend(self):
-        if np.random.rand() < self.epsilon:
-            scores = np.random.rand(self.n_arms)
-        else:
-            scores = self.values.mean(axis=0)
-
-        S = build_feasible_set(self.prices, self.budget, scores)
-
-        return np.array([max(S, key=lambda a: self.values[u, a]) for u in range(self.n_users)])
-
-
-    def update(self, users, arms, rewards):
-        for u, a, r in zip(users, arms, rewards):
-            self.counts[u, a] += 1
-            n = self.counts[u, a]
-            v = self.values[u, a]
-            self.values[u, a] = ((n - 1) / n) * v + (1 / n) * r
-
-
-class EpsilonGreedyImproved:
     """
     Improved Epsilon-Greedy agent using UCB-based exploration and decaying ε schedule.
 
@@ -279,11 +265,18 @@ class EpsilonGreedyImproved:
                 user_counts = self.counts[u] + 1e-5  # prevent div by zero
                 user_values = self.values[u]
                 ucb_scores = user_values + np.sqrt(2 * np.log(self.total_counts + 1) / user_counts)
+
                 S = build_feasible_set(self.prices, self.budget, ucb_scores)
+                # S = build_feasible_set_generic(self.prices, self.budget, ucb_scores)
+
+
                 chosen_arm = max(S, key=lambda a: ucb_scores[a])
             else:
                 # Exploitation: use learned mean reward estimates
                 S = build_feasible_set(self.prices, self.budget, self.values[u])
+                # S = build_feasible_set_generic(self.prices, self.budget, self.values[u])
+
+
                 chosen_arm = max(S, key=lambda a: self.values[u, a])
 
             recommendations.append(chosen_arm)
@@ -341,6 +334,8 @@ class UCB:
         scores = ucb.mean(axis=0)
 
         S = build_feasible_set(self.prices, self.budget, scores)
+        # S = build_feasible_set_generic(self.prices, self.budget, ucb, agg_fn=np.mean)
+
 
         return np.array([max(S, key=lambda a: ucb[u, a]) for u in range(self.n_users)])
 
@@ -386,7 +381,9 @@ class ThompsonSampling:
 
         scores = samples.mean(axis=0)
 
-        S = build_feasible_set(self.prices, self.budget, scores)
+        # S = build_feasible_set(self.prices, self.budget, scores)
+        S = build_feasible_set_generic(self.prices, self.budget, samples, agg_fn=np.mean)
+
 
         return np.array([max(S, key=lambda a: samples[u, a]) for u in range(self.n_users)])
 

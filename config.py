@@ -3,19 +3,12 @@ from recommenders import *
 
 base_configs = {
         Recommender: [
+            {'max_iters': 30, 'smoothing': 0.05, 'explore_rounds': 10},
             {'max_iters': 50, 'smoothing': 0.10, 'explore_rounds': 10},
             {'max_iters': 50, 'smoothing': 0.15, 'explore_rounds': 10},
             {'max_iters': 50, 'smoothing': 0.11, 'explore_rounds': 10},
-            {'explore_rounds': 15, 'max_iters': 70, 'smoothing': 0.38},
             {'max_iters': 50, 'smoothing': 0.50, 'explore_rounds': 10},
-        ],
-
-        EpsilonGreedy: [
-            {'epsilon': 0.10},
-            {'epsilon': 0.17},
-            {'epsilon': 0.14},
-            {'epsilon': 0.12},
-            {'epsilon': 0.11},
+            {'max_iters': 70, 'smoothing': 0.38, 'explore_rounds': 15},
         ],
 
         UCB: [
@@ -28,14 +21,15 @@ base_configs = {
 
         ThompsonSampling: [
             {'alpha': 0.01},
+            {'alpha': 0.05},
+            {'alpha': 0.10},
+            {'alpha': 0.15},
             {'alpha': 0.17},
-            {'alpha': 0.11},
-            {'alpha': 0.24},
-            {'alpha': 0.27},
+            {'alpha': 0.20},
         ],
-        EpsilonGreedyImproved: [
-            {'epsilon': 0.30, 'decay': 0.95},
-            {'epsilon': 0.50, 'decay': 0.95},
+        EpsilonGreedy: [
+            {'epsilon': 0.30, 'decay': 0.99},
+            {'epsilon': 0.50, 'decay': 0.99},
             {'epsilon': 0.30, 'decay': 0.97},
             {'epsilon': 0.50, 'decay': 0.97},
         ],
@@ -50,11 +44,10 @@ def get_base_agent_configurations():
 
     # Comment in agents you wish to run
     agents = [
-        # Recommender,
-        # EpsilonGreedy,
+        Recommender,
+        EpsilonGreedy,
         UCB,
-        # ThompsonSampling,
-        # EpsilonGreedyImproved
+        ThompsonSampling,
     ]
 
     return {agent: configs[agent] for agent in agents}
