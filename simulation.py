@@ -54,12 +54,13 @@ def format_params(params):
     return {k: (f"{v:.2f}" if isinstance(v, (float, np.floating)) else v) for k, v in params.items()}
 
 
-def filter_within_10_percent(top_configs):
+def filter_within_k_percent(top_configs, k_percent):
     """
     Filter configurations that have rewards within 10% of the top reward for each agent.
 
     Parameters:
     - top_configs: dict mapping AgentClass to list of (params, reward) tuples sorted descending
+    - k_percent: float percentage to filter by
 
     Returns:
     - filtered: dict with same keys but only configs within 90% of top reward kept
@@ -70,7 +71,7 @@ def filter_within_10_percent(top_configs):
             filtered[AgentClass] = []
             continue
         top_reward = configs[0][1]
-        threshold = top_reward * 0.9
+        threshold = top_reward * k_percent
         filtered_configs = [(params, reward) for params, reward in configs if reward >= threshold]
         filtered[AgentClass] = filtered_configs
     return filtered
