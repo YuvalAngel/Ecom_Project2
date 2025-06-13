@@ -5,14 +5,27 @@ import numpy as np # Ensure numpy is imported if not already in your file
 
 base_configs = {
 
-    THCR: [
-        # Varying smoothing with current best explore_rounds = 10
-        # {'smoothing': 0.05, 'explore_rounds': 5}, # Current best
-        {'smoothing': 0.05, 'explore_rounds': 10},
-        {'smoothing': 0.05, 'explore_rounds': 20},
+    # THCR: [
+    #     # Varying smoothing with current best explore_rounds = 10
+    #     # {'smoothing': 0.05, 'explore_rounds': 5}, # Current best
+    #     {'smoothing': 0.05, 'explore_rounds': 10},
+    #     {'smoothing': 0.05, 'explore_rounds': 20},
 
-        # {'smoothing': 0.10, 'explore_rounds': 10},
-    #     {'smoothing': 0.15, 'explore_rounds': 10},
+    #     # {'smoothing': 0.10, 'explore_rounds': 10},
+    # #     {'smoothing': 0.15, 'explore_rounds': 10},
+    # ],
+
+    THCR: [
+        # Baseline configurations (similar to your previous ones, but with new hill-climbing params set to a starting point)
+        {'smoothing': 0.05, 'explore_rounds': 10, 'n_hill_climb_restarts': 5, 'random_walk_prob': 0.05, 'initial_set_noise_scale': 0.01},
+        {'smoothing': 0.05, 'explore_rounds': 20, 'n_hill_climb_restarts': 5, 'random_walk_prob': 0.05, 'initial_set_noise_scale': 0.01},
+
+        # Tuning random_walk_prob (higher chance of escaping local optima)
+        {'smoothing': 0.05, 'explore_rounds': 10, 'n_hill_climb_restarts': 5, 'random_walk_prob': 0.10, 'initial_set_noise_scale': 0.01},
+        {'smoothing': 0.05, 'explore_rounds': 10, 'n_hill_climb_restarts': 5, 'random_walk_prob': 0.15, 'initial_set_noise_scale': 0.01},
+
+        # Tuning initial_set_noise_scale (more varied starting points for restarts)
+        {'smoothing': 0.05, 'explore_rounds': 10, 'n_hill_climb_restarts': 5, 'random_walk_prob': 0.05, 'initial_set_noise_scale': 0.05},
     ],
 
     UCB: [
@@ -219,7 +232,7 @@ def get_base_agent_configurations():
     configs = base_configs
     agents = [
         # These are good
-        # THCR,
+        THCR,
         # UCB,
         # ThompsonSampling,
         # UCB_MB,
