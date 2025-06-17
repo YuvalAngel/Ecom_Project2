@@ -15,18 +15,14 @@ base_configs = {
     # #     {'smoothing': 0.15, 'explore_rounds': 10},
     # ],
 
-    THCR: [
-        # Baseline configurations (similar to your previous ones, but with new hill-climbing params set to a starting point)
-        {'smoothing': 0.05, 'explore_rounds': 10, 'n_hill_climb_restarts': 5, 'random_walk_prob': 0.05, 'initial_set_noise_scale': 0.01},
-        {'smoothing': 0.05, 'explore_rounds': 20, 'n_hill_climb_restarts': 5, 'random_walk_prob': 0.05, 'initial_set_noise_scale': 0.01},
 
-        # Tuning random_walk_prob (higher chance of escaping local optima)
-        {'smoothing': 0.05, 'explore_rounds': 10, 'n_hill_climb_restarts': 5, 'random_walk_prob': 0.10, 'initial_set_noise_scale': 0.01},
-        {'smoothing': 0.05, 'explore_rounds': 10, 'n_hill_climb_restarts': 5, 'random_walk_prob': 0.15, 'initial_set_noise_scale': 0.01},
-
-        # Tuning initial_set_noise_scale (more varied starting points for restarts)
-        {'smoothing': 0.05, 'explore_rounds': 10, 'n_hill_climb_restarts': 5, 'random_walk_prob': 0.05, 'initial_set_noise_scale': 0.05},
-    ],
+    # THCR: [
+    #     # Current best 14500
+    #     {'smoothing': 0.05, 'explore_rounds': 10, 'n_hill_climb_restarts': 5, 'random_walk_prob': 0.05, 'initial_set_noise_scale': 0.05},
+        
+    #     {'smoothing': 0.05, 'explore_rounds': 10, 'n_hill_climb_restarts': 10, 'random_walk_prob': 0.05, 'initial_set_noise_scale': 0.05},
+    #     {'smoothing': 0.05, 'explore_rounds': 10, 'n_hill_climb_restarts': 10, 'random_walk_prob': 0.05, 'initial_set_noise_scale': 0.05},
+    # ],
 
     UCB: [
         {'c': 0.01}, # Current best
@@ -170,6 +166,63 @@ base_configs = {
         {'alpha': 0.15, 'initial_q_value': 0.5, 'initial_counts': 1}, # New: Fine-tune alpha around previous best
         {'alpha': 0.25, 'initial_q_value': 0.5, 'initial_counts': 1}, # New: Fine-tune alpha around previous best
     ],
+    CBwKUCBV: [
+        # Top performer from previous run (for direct comparison and confirmation)
+        {'alpha': 0.050, 'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-4}, # Effectively no noise, based on previous result
+
+        # Explore alpha around 0.05
+        {'alpha': 0.040, 'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-4},
+        {'alpha': 0.060, 'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-4},
+
+        # Investigate knapsack noise with best alpha (0.05)
+        {'alpha': 0.050, 'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-5}, # Very small noise
+        {'alpha': 0.050, 'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-6}, # As previously
+        {'alpha': 0.050, 'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-3}, # Higher noise (as suggested)
+        {'alpha': 0.050, 'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-2}, # Even higher noise (as suggested)
+
+        # Test alpha 0.1 with optimal knapsack noise (or lack thereof)
+        {'alpha': 0.100, 'epsilon': 1e-6, 'add_noise_to_knapsack': False, 'knapsack_noise_scale': 0.0}, # Second best overall previously
+
+        # Test alpha 0.1 with a low noise scale
+        {'alpha': 0.100, 'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-4},
+
+        # Re-test alpha 0.2 with no noise (just to confirm its poor performance, or see if knapsack noise was the issue)
+        {'alpha': 0.200, 'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 0.0},
+    ],
+    CBwKTunedUCB: [
+        # Best performers from previous run
+        {'epsilon': 1e-6, 'add_noise_to_knapsack': False, 'knapsack_noise_scale': 0.0}, # Previously best
+        {'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 0.0},  # Second best
+
+        # Explore knapsack noise more broadly
+        {'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-5},
+        {'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-4}, # Existing tested value
+        {'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 5e-4}, # Existing tested value
+        {'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-3}, # As suggested
+        {'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-2}, # As suggested (very high)
+
+        # Test with slightly larger epsilon (less common but worth one try)
+        {'epsilon': 1e-3, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 1e-4}, # As suggested
+
+        # Two more with high noise to see if it helps escape any local knapsack issues
+        {'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 2e-3},
+        {'epsilon': 1e-6, 'add_noise_to_knapsack': True, 'knapsack_noise_scale': 5e-3},
+    ],
+
+    CBwKGreedyUCB: [
+        # These are all good
+        {'alpha': 0.18},
+        {'alpha': 0.15},
+        {'alpha': 0.20},
+    ],
+    
+    THCR: [
+        # 1. Overall Best (Reward: 14444.90)
+        {'smoothing': 0.050, 'explore_rounds': 10, 'n_hill_climb_restarts': 10, 'random_walk_prob': 0.150, 'initial_set_noise_scale': 0.050},
+        
+        # 2. Second Best (Reward: 14439.40)
+        {'smoothing': 0.050, 'explore_rounds': 10, 'n_hill_climb_restarts': 10, 'random_walk_prob': 0.100, 'initial_set_noise_scale': 0.050},
+    ],
 }
 
 
@@ -195,44 +248,11 @@ ensemble_base_model_configs = [
     (ThompsonSampling, {'alpha_prior': 0.050, 'beta_prior': 1.000}),
 ]
 
-hashable_ensemble_base_model_configs = tuple([
-    (model_class, frozenset(config.items()))
-    for model_class, config in ensemble_base_model_configs
-])
-
-
-base_configs[EnsembleWeightedBandit] = [
-    {
-        'base_models_and_configs': hashable_ensemble_base_model_configs,
-        'learning_rate': 0.01, # Lower learning rate for more stable weight changes
-        'initial_weight_value': 1.0, # Start with equal weights
-    },
-    {
-        'base_models_and_configs': hashable_ensemble_base_model_configs,
-        'learning_rate': 0.05, # Moderate learning rate
-        'initial_weight_value': 1.0,
-    },
-    {
-        'base_models_and_configs': hashable_ensemble_base_model_configs,
-        'learning_rate': 0.1, # Your original learning rate, good for quicker adaptation
-        'initial_weight_value': 1.0,
-    },
-    {
-        'base_models_and_configs': hashable_ensemble_base_model_configs,
-        'learning_rate': 0.2, # Higher learning rate for more aggressive adaptation
-        'initial_weight_value': 1.0,
-    },
-    # You might also consider experimenting with `initial_weight_value`
-    # e.g., giving higher initial weights to models you expect to perform better
-    # based on prior runs.
-]
-
-
 def get_base_agent_configurations():
     configs = base_configs
     agents = [
         # These are good
-        THCR,
+        # THCR,
         # UCB,
         # ThompsonSampling,
         # UCB_MB,
@@ -240,6 +260,10 @@ def get_base_agent_configurations():
         # GreedyCostEfficiency,
         # AdaptiveBudgetCombinatorialBandit,
         # FractionalKnapsackDecreasingEpsilonGreedy,
+
+        # CBwKGreedyUCB,
+        CBwKUCBV,
+        # CBwKTunedUCB,
 
         
         # These are not good
@@ -251,6 +275,8 @@ def get_base_agent_configurations():
         # LinUCB,
         # ThompsonSamplingSimilarity,
         # MF_UCB,
+
+        # This is shit
         # EnsembleWeightedBandit,
     ]
     return {agent: configs[agent] for agent in agents}

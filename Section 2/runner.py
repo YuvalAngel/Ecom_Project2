@@ -13,7 +13,7 @@ def format_params(params):
     Returns:
     - dict with formatted string values
     """
-    return ", ".join([f"{k}={v:.3f}" if isinstance(v, (float, np.floating)) else f"{k}={v}" for k, v in params.items()])
+    return ", ".join([f"{k}={v:.6f}" if isinstance(v, (float, np.floating)) else f"{k}={v}" for k, v in params.items()])
 
 
 def filter_within_range(top_configs, range_val=100): # Renamed 'range' to 'range_val' to avoid conflict with built-in range

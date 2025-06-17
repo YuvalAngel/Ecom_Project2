@@ -14,6 +14,9 @@ from .UCB import UCB
 from .ThompsonSampling import ThompsonSampling
 from .GreedyBudget import GreedyBudget
 from .EnsembleWeightedBandit import EnsembleWeightedBandit
+from .CBwKGreedyUCB import CBwKGreedyUCB
+from .CBwKUCBV import CBwKUCBV
+from .CBwKTunedUCB import CBwKTunedUCB
 
 
 
@@ -35,5 +38,9 @@ __all__ = [
     "ThompsonSampling",
     "GreedyBudget",
     "EnsembleWeightedBandit",
+    "CBwKGreedyUCB",
+    "CBwKTunedUCB",
+    "CBwKUCBV",
+    
     # Add all other model class names here if you want them to be available via `*`
 ]
